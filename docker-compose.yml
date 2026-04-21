@@ -1,0 +1,56 @@
+name: school-circle
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: school-circle-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-school_circle}
+      POSTGRES_USER: ${POSTGRES_USER:-school_circle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-school_circle}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    container_name: school-circle-backend
+    depends_on:
+      - db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-school_circle}
+      POSTGRES_USER: ${POSTGRES_USER:-school_circle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-school_circle}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    command: sh /app/entrypoint.sh
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: school-circle-frontend
+    depends_on:
+      - backend
+    environment:
+      VITE_APP_NAME: ${VITE_APP_NAME:-School Circle}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+volumes:
+  postgres_data:

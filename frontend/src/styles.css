@@ -1,0 +1,92 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #14213d;
+  background: linear-gradient(180deg, #f8f9fb 0%, #eef2f7 100%);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+a {
+  color: #0b6e4f;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  background: #edf2f7;
+  border-radius: 6px;
+  padding: 0.15rem 0.35rem;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.app-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.app-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.page-card {
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 18px;
+  padding: 1.5rem;
+  box-shadow: 0 12px 30px rgba(20, 33, 61, 0.06);
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: #0b6e4f;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.todo-box {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #f5f7fa;
+  border: 1px dashed #bcccdc;
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
