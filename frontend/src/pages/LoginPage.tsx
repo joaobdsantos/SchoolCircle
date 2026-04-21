@@ -1,12 +1,17 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+
+import { ACCESS_TOKEN_KEY, login, REFRESH_TOKEN_KEY } from "../services/auth";
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
@@ -15,8 +20,21 @@ export function LoginPage() {
       return;
     }
 
-    // TODO: Integrar chamada real de login com a API.
-    alert("Login válido no frontend (sem integração com backend ainda).");
+    try {
+      setIsSubmitting(true);
+      const data = await login({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      localStorage.setItem(ACCESS_TOKEN_KEY, data.access);
+      localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh);
+      navigate("/home", { replace: true });
+    } catch {
+      setError("E-mail ou senha invalidos.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -50,8 +68,8 @@ export function LoginPage() {
           <p style={{ color: "#b42318", marginTop: "0.75rem" }}>{error}</p>
         ) : null}
 
-        <button type="submit" style={{ marginTop: "1rem" }}>
-          Entrar
+        <button type="submit" style={{ marginTop: "1rem" }} disabled={isSubmitting}>
+          {isSubmitting ? "Entrando..." : "Entrar"}
         </button>
       </form>
 
