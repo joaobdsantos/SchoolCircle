@@ -52,13 +52,13 @@ No Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-1. Suba os containers:
+2. Suba os containers:
 
 ```bash
 docker compose up --build
 ```
 
-1. Acesse:
+3. Acesse:
 
 - Frontend: [http://localhost:5173](http://localhost:5173)
 - Backend: [http://localhost:8000](http://localhost:8000)
