@@ -1,14 +1,19 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+
+import { register } from "../services/auth";
 
 export function RegisterPage() {
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
@@ -27,8 +32,19 @@ export function RegisterPage() {
       return;
     }
 
-    // TODO: Integrar chamada real de criação de conta com a API.
-    alert("Cadastro válido no frontend (sem integração com backend ainda).");
+    try {
+      setIsSubmitting(true);
+      await register({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      navigate("/login", { replace: true });
+    } catch {
+      setError("Nao foi possivel criar a conta. Verifique os dados e tente novamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -84,8 +100,8 @@ export function RegisterPage() {
           <p style={{ color: "#b42318", marginTop: "0.75rem" }}>{error}</p>
         ) : null}
 
-        <button type="submit" style={{ marginTop: "1rem" }}>
-          Criar conta
+        <button type="submit" style={{ marginTop: "1rem" }} disabled={isSubmitting}>
+          {isSubmitting ? "Criando conta..." : "Criar conta"}
         </button>
       </form>
 

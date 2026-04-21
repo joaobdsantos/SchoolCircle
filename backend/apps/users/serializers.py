@@ -6,6 +6,44 @@ from rest_framework_simplejwt.tokens import RefreshToken
 User = get_user_model()
 
 
+class RegisterSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_name(self, value):
+        name = value.strip()
+        if not name:
+            raise serializers.ValidationError("Nome e obrigatorio.")
+        return name
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("Ja existe conta com este email.")
+        return email
+
+    def create(self, validated_data):
+        name = validated_data["name"]
+        email = validated_data["email"]
+        password = validated_data["password"]
+
+        user = User.objects.create_user(
+            username=email,
+            first_name=name,
+            email=email,
+            password=password,
+        )
+        return user
+
+    def to_representation(self, instance):
+        return {
+            "id": instance.id,
+            "name": instance.first_name,
+            "email": instance.email,
+        }
+
+
 class EmailLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)

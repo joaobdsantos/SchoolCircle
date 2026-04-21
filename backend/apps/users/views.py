@@ -2,7 +2,18 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.users.serializers import EmailLoginSerializer
+from apps.users.serializers import EmailLoginSerializer, RegisterSerializer
+
+
+class RegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(RegisterSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):
