@@ -2,7 +2,12 @@ import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
-import { ACCESS_TOKEN_KEY, login, REFRESH_TOKEN_KEY } from "../services/auth";
+import {
+  ACCESS_TOKEN_KEY,
+  DISPLAY_NAME_KEY,
+  login,
+  REFRESH_TOKEN_KEY,
+} from "../services/auth";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -29,6 +34,7 @@ export function LoginPage() {
 
       localStorage.setItem(ACCESS_TOKEN_KEY, data.access);
       localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh);
+      localStorage.setItem(DISPLAY_NAME_KEY, email.trim().split("@")[0] || "Usuario");
       navigate("/home", { replace: true });
     } catch {
       setError("E-mail ou senha invalidos.");

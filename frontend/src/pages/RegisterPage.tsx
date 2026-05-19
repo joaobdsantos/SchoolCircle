@@ -39,6 +39,7 @@ export function RegisterPage() {
         email: email.trim().toLowerCase(),
         password,
       });
+
       navigate("/login", { replace: true });
     } catch {
       setError("Nao foi possivel criar a conta. Verifique os dados e tente novamente.");

@@ -52,13 +52,13 @@ No Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-2. Suba os containers:
+1. Suba os containers:
 
 ```bash
 docker compose up --build
 ```
 
-3. Acesse:
+1. Acesse:
 
 - Frontend: [http://localhost:5173](http://localhost:5173)
 - Backend: [http://localhost:8000](http://localhost:8000)
@@ -67,14 +67,4 @@ docker compose up --build
 ## Observações
 
 - O backend sobe com migrações automáticas no start do container.
-- O app `users` já usa `Custom User` desde o início para evitar problemas futuros com migrações.
 - Os apps `groups`, `attendance`, `study` e `gamification` foram criados apenas como placeholders estruturais.
-- Há comentários `TODO` nos pontos em que a implementação futura deve entrar.
-
-## Próximos passos
-
-- Criar os modelos de domínio reais por app
-- Definir serializers e regras de negócio
-- Implementar autenticação real com endpoints próprios
-- Evoluir rotas protegidas no frontend
-- Criar páginas reais do produto

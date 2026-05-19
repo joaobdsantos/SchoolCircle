@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.users.models import AcademicProfile
+
 
 User = get_user_model()
 
@@ -65,4 +67,33 @@ class EmailLoginSerializer(serializers.Serializer):
         refresh = RefreshToken.for_user(user)
         attrs["access"] = str(refresh.access_token)
         attrs["refresh"] = str(refresh)
+        return attrs
+
+
+class AcademicProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AcademicProfile
+        fields = (
+            "education_level",
+            "is_independent",
+            "institution_name",
+            "course_name",
+        )
+
+    def validate(self, attrs):
+        is_independent = attrs.get("is_independent")
+        institution_name = (attrs.get("institution_name") or "").strip()
+        course_name = (attrs.get("course_name") or "").strip()
+
+        if is_independent is False:
+            errors = {}
+            if not institution_name:
+                errors["institution_name"] = ["Este campo e obrigatorio para nao independente."]
+            if not course_name:
+                errors["course_name"] = ["Este campo e obrigatorio para nao independente."]
+            if errors:
+                raise serializers.ValidationError(errors)
+
+        attrs["institution_name"] = institution_name
+        attrs["course_name"] = course_name
         return attrs

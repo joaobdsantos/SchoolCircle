@@ -24,6 +24,7 @@ type LoginResponse = {
 
 export const ACCESS_TOKEN_KEY = "access_token";
 export const REFRESH_TOKEN_KEY = "refresh_token";
+export const DISPLAY_NAME_KEY = "display_name";
 
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
   const response = await api.post<LoginResponse>("/auth/login/", payload);

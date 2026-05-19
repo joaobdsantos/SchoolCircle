@@ -1,7 +1,13 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 
+import { ACCESS_TOKEN_KEY } from "../services/auth";
 
 export function Layout() {
+  const location = useLocation();
+  const hasAccessToken = Boolean(localStorage.getItem(ACCESS_TOKEN_KEY));
+  const showAuthenticatedNav =
+    hasAccessToken && ["/home", "/academic-profile"].includes(location.pathname);
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -10,9 +16,12 @@ export function Layout() {
           <h1>School Circle</h1>
         </div>
 
-        <nav className="app-nav">
-          <Link to="/">Home</Link>
-        </nav>
+        {showAuthenticatedNav ? (
+          <nav className="app-nav">
+            <Link to="/home">Home</Link>
+            <Link to="/academic-profile">Perfil academico</Link>
+          </nav>
+        ) : null}
       </header>
 
       <main className="app-content">
