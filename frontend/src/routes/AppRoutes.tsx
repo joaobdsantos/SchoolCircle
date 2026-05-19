@@ -8,6 +8,7 @@ import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { AcademicProfilePage } from "../pages/AcademicProfilePage";
+import { EditProfilePage } from "../pages/EditProfilePage";
 import { ACCESS_TOKEN_KEY } from "../services/auth";
 
 export function AppRoutes() {
@@ -46,6 +47,14 @@ export function AppRoutes() {
           element={
             <ProtectedRoute>
               <AcademicProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="edit-profile"
+          element={
+            <ProtectedRoute>
+              <EditProfilePage />
             </ProtectedRoute>
           }
         />

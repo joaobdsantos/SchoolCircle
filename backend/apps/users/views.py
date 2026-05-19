@@ -7,6 +7,7 @@ from apps.users.serializers import (
     AcademicProfileSerializer,
     EmailLoginSerializer,
     RegisterSerializer,
+    UpdateUserSerializer,
 )
 
 
@@ -45,7 +46,9 @@ class AcademicProfileView(APIView):
         profile = AcademicProfile.objects.filter(user=request.user).first()
         if profile is None:
             return Response(None, status=status.HTTP_200_OK)
-        return Response(AcademicProfileSerializer(profile).data, status=status.HTTP_200_OK)
+        return Response(
+            AcademicProfileSerializer(profile).data, status=status.HTTP_200_OK
+        )
 
     def put(self, request):
         profile = AcademicProfile.objects.filter(user=request.user).first()
@@ -57,4 +60,19 @@ class AcademicProfileView(APIView):
 
         serializer.is_valid(raise_exception=True)
         serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class UpdateUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request):
+        serializer = UpdateUserSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={"user": request.user},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)

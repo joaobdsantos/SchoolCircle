@@ -6,7 +6,7 @@ export function Layout() {
   const location = useLocation();
   const hasAccessToken = Boolean(localStorage.getItem(ACCESS_TOKEN_KEY));
   const showAuthenticatedNav =
-    hasAccessToken && ["/home", "/academic-profile"].includes(location.pathname);
+    hasAccessToken && ["/home", "/academic-profile", "/edit-profile"].includes(location.pathname);
 
   return (
     <div className="app-shell">
@@ -20,6 +20,7 @@ export function Layout() {
           <nav className="app-nav">
             <Link to="/home">Home</Link>
             <Link to="/academic-profile">Perfil academico</Link>
+            <Link to="/edit-profile">Editar Conta</Link>
           </nav>
         ) : null}
       </header>
