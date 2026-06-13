@@ -31,9 +31,8 @@ class RegisterSerializer(serializers.Serializer):
         password = validated_data["password"]
 
         user = User.objects.create_user(
-            username=email,
-            first_name=name,
             email=email,
+            full_name=name,
             password=password,
         )
         return user
@@ -41,7 +40,7 @@ class RegisterSerializer(serializers.Serializer):
     def to_representation(self, instance):
         return {
             "id": instance.id,
-            "name": instance.first_name,
+            "name": instance.full_name,
             "email": instance.email,
         }
 
@@ -154,11 +153,9 @@ class UpdateUserSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
         if "name" in validated_data:
-            instance.first_name = validated_data["name"]
+            instance.full_name = validated_data["name"]
         if "email" in validated_data:
-            email = validated_data["email"]
-            instance.email = email
-            instance.username = email
+            instance.email = validated_data["email"]
         if "new_password" in validated_data:
             instance.set_password(validated_data["new_password"])
         instance.save()
@@ -167,6 +164,6 @@ class UpdateUserSerializer(serializers.Serializer):
     def to_representation(self, instance):
         return {
             "id": instance.id,
-            "name": instance.first_name,
+            "name": instance.full_name,
             "email": instance.email,
         }

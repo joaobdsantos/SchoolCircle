@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -21,14 +23,19 @@ class RegisterViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["name"], "Ana Silva")
         self.assertEqual(response.data["email"], "ana@example.com")
-        self.assertTrue(User.objects.filter(email="ana@example.com").exists())
+        self.assertNotIn("password", response.data)
+
+        user = User.objects.get(email="ana@example.com")
+        self.assertIsInstance(user.id, uuid.UUID)
+        self.assertEqual(user.full_name, "Ana Silva")
+        self.assertNotEqual(user.password, "12345678")
+        self.assertTrue(user.check_password("12345678"))
 
     def test_register_rejects_duplicate_email(self):
         User.objects.create_user(
-            username="ana@example.com",
             email="ana@example.com",
             password="12345678",
-            first_name="Ana",
+            full_name="Ana",
         )
 
         response = self.client.post(
@@ -43,3 +50,45 @@ class RegisterViewTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("email", response.data)
+
+
+class LoginViewTests(APITestCase):
+    def test_login_returns_jwt_tokens(self):
+        User.objects.create_user(
+            email="ana@example.com",
+            password="12345678",
+            full_name="Ana",
+        )
+
+        response = self.client.post(
+            "/api/auth/login/",
+            {
+                "email": "ana@example.com",
+                "password": "12345678",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertNotIn("password", response.data)
+
+    def test_login_rejects_inactive_user(self):
+        User.objects.create_user(
+            email="ana@example.com",
+            password="12345678",
+            full_name="Ana",
+            is_active=False,
+        )
+
+        response = self.client.post(
+            "/api/auth/login/",
+            {
+                "email": "ana@example.com",
+                "password": "12345678",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
