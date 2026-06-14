@@ -1,11 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { ACCESS_TOKEN_KEY } from "../services/auth";
+import { clearSession } from "../services/auth";
 
 export function HomePage() {
   const navigate = useNavigate();
 
   function handleLogout() {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    clearSession();
     navigate("/login");
   }
 

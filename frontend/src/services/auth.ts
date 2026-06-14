@@ -1,4 +1,10 @@
-import { api } from "./api";
+import { publicApi, refreshAccessTokenRequest } from "./api";
+export {
+  ACCESS_TOKEN_KEY,
+  clearSession,
+  DISPLAY_NAME_KEY,
+  REFRESH_TOKEN_KEY,
+} from "./session";
 
 type LoginPayload = {
   email: string;
@@ -12,7 +18,7 @@ type RegisterPayload = {
 };
 
 type RegisterResponse = {
-  id: number;
+  id: string;
   name: string;
   email: string;
 };
@@ -22,16 +28,16 @@ type LoginResponse = {
   refresh: string;
 };
 
-export const ACCESS_TOKEN_KEY = "access_token";
-export const REFRESH_TOKEN_KEY = "refresh_token";
-export const DISPLAY_NAME_KEY = "display_name";
-
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
-  const response = await api.post<LoginResponse>("/auth/login/", payload);
+  const response = await publicApi.post<LoginResponse>("/auth/login/", payload);
   return response.data;
 }
 
 export async function register(payload: RegisterPayload): Promise<RegisterResponse> {
-  const response = await api.post<RegisterResponse>("/auth/register/", payload);
+  const response = await publicApi.post<RegisterResponse>("/auth/register/", payload);
   return response.data;
+}
+
+export async function refreshAccessToken(): Promise<string> {
+  return refreshAccessTokenRequest();
 }

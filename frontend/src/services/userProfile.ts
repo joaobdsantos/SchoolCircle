@@ -1,5 +1,4 @@
 import { api } from "./api";
-import { ACCESS_TOKEN_KEY } from "./auth";
 
 export type UpdateUserPayload = {
   name?: string;
@@ -9,21 +8,14 @@ export type UpdateUserPayload = {
 };
 
 export type UserProfileResponse = {
-  id: number;
+  id: string;
   name: string;
   email: string;
 };
 
-function getAuthHeaders() {
-  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export async function updateUserProfile(
   payload: UpdateUserPayload,
 ): Promise<UserProfileResponse> {
-  const response = await api.put<UserProfileResponse>("/auth/profile/", payload, {
-    headers: getAuthHeaders(),
-  });
+  const response = await api.put<UserProfileResponse>("/auth/profile/", payload);
   return response.data;
 }

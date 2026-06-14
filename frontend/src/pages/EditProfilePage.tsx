@@ -1,7 +1,10 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { updateUserProfile } from "../services/userProfile";
+import {
+  updateUserProfile,
+  type UpdateUserPayload,
+} from "../services/userProfile";
 
 export function EditProfilePage() {
   const navigate = useNavigate();
@@ -57,7 +60,7 @@ export function EditProfilePage() {
 
     try {
       setIsSubmitting(true);
-      const payload: Record<string, string> = {
+      const payload: UpdateUserPayload = {
         password: password,
       };
       
