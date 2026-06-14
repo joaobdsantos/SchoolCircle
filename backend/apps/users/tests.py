@@ -92,3 +92,40 @@ class LoginViewTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class TokenRefreshViewTests(APITestCase):
+    def test_refresh_token_returns_new_access_token(self):
+        User.objects.create_user(
+            email="ana@example.com",
+            password="12345678",
+            full_name="Ana",
+        )
+
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "email": "ana@example.com",
+                "password": "12345678",
+            },
+            format="json",
+        )
+        refresh = login_response.data["refresh"]
+
+        response = self.client.post(
+            "/api/auth/token/refresh/",
+            {"refresh": refresh},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+
+    def test_refresh_token_rejects_invalid_token(self):
+        response = self.client.post(
+            "/api/auth/token/refresh/",
+            {"refresh": "invalid-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
