@@ -8,4 +8,5 @@ urlpatterns = [
     path("health/", healthcheck_view, name="healthcheck"),
     path("auth/", include("apps.users.urls")),
     path("academic-profile/", AcademicProfileView.as_view(), name="academic-profile"),
+    path("groups/", include("apps.groups.urls")),
 ]
