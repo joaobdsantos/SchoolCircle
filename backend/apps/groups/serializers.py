@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.groups.models import StudyGroup
+from apps.groups.models import GroupMembership, StudyGroup
 
 
 class StudyGroupSerializer(serializers.ModelSerializer):
@@ -42,3 +42,21 @@ class StudyGroupSerializer(serializers.ModelSerializer):
         description = validated_data.get("description", instance.description)
         instance.update_group(name=name, description=description)
         return instance
+
+
+class GroupMembershipSerializer(serializers.ModelSerializer):
+    rank = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = GroupMembership
+        fields = (
+            "id",
+            "user",
+            "group",
+            "role",
+            "joined_at",
+            "group_points",
+            "is_active",
+            "rank",
+        )
+        read_only_fields = ("id", "joined_at", "rank")
