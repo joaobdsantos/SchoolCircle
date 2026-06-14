@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.groups.models import GroupMembership, StudyGroup
+from apps.groups.models import GroupInvite, GroupMembership, StudyGroup
 
 
 class StudyGroupSerializer(serializers.ModelSerializer):
@@ -60,3 +60,32 @@ class GroupMembershipSerializer(serializers.ModelSerializer):
             "rank",
         )
         read_only_fields = ("id", "joined_at", "rank")
+
+
+class GroupInviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupInvite
+        fields = (
+            "id",
+            "group",
+            "sent_by",
+            "sent_to",
+            "status",
+            "sent_at",
+            "responded_at",
+        )
+        read_only_fields = ("id", "sent_at", "responded_at")
+
+    def validate(self, attrs):
+        values = {}
+        for field in ("group", "sent_by", "sent_to", "status", "responded_at"):
+            if field in attrs:
+                values[field] = attrs[field]
+            elif self.instance is not None:
+                values[field] = getattr(self.instance, field)
+
+        instance = GroupInvite(**values)
+        if self.instance is not None:
+            instance.pk = self.instance.pk
+        instance.clean()
+        return attrs
