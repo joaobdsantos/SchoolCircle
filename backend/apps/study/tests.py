@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.gamification.models import PointTransaction, UserProgress
 from apps.study.models import StudySession
 
 
@@ -139,3 +140,48 @@ class StudySessionApiTests(APITestCase):
         self.assertEqual(session.user, user)
         self.assertTrue(session.is_valid)
         self.assertEqual(session.points_granted, 5)
+
+    def test_post_generates_point_transaction(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/study-sessions/",
+            {
+                "study_date": "2026-06-14",
+                "content_description": "Estudo de grafos e Dijkstra",
+                "photo_url": "https://example.com/photo.jpg",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        session = StudySession.objects.get(id=response.data["id"])
+        transaction = PointTransaction.objects.get(study_session=session)
+        self.assertEqual(transaction.user, user)
+        self.assertEqual(transaction.points, 5)
+        self.assertEqual(
+            transaction.source_type,
+            PointTransaction.ActivityType.STUDY_SESSION,
+        )
+
+    def test_post_updates_user_progress_points_and_streak(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/study-sessions/",
+            {
+                "study_date": "2026-06-14",
+                "content_description": "Estudo de grafos e Dijkstra",
+                "photo_url": "https://example.com/photo.jpg",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        progress = UserProgress.objects.get(user=user)
+        self.assertEqual(progress.total_points, 5)
+        self.assertEqual(progress.current_streak, 1)
+        self.assertEqual(progress.longest_streak, 1)
+        self.assertEqual(progress.last_valid_activity_date, date(2026, 6, 14))

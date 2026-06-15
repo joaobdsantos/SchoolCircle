@@ -1,7 +1,10 @@
+from django.db import transaction
 from rest_framework import generics, permissions
 
 from apps.attendance.models import AttendanceRecord
 from apps.attendance.serializers import AttendanceRecordSerializer
+from apps.gamification.services import PointsService
+from apps.gamification.strategies import AttendancePointsStrategy
 
 
 class AttendanceRecordListCreateView(generics.ListCreateAPIView):
@@ -13,3 +16,12 @@ class AttendanceRecordListCreateView(generics.ListCreateAPIView):
             "-class_date",
             "-registered_at",
         )
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            attendance_record = serializer.save()
+            PointsService.grant_points(
+                user=self.request.user,
+                activity=attendance_record,
+                strategy=AttendancePointsStrategy(),
+            )

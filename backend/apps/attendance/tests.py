@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.attendance.models import AttendanceRecord
+from apps.gamification.models import PointTransaction, UserProgress
 from apps.groups.models import StudyGroup
 
 
@@ -161,6 +162,7 @@ class AttendanceRecordApiTests(APITestCase):
 
     def test_create_binds_record_to_request_user(self):
         user = self.create_user()
+        group = self.create_group()
         self.client.force_authenticate(user=user)
 
         response = self.client.post(
@@ -169,7 +171,7 @@ class AttendanceRecordApiTests(APITestCase):
                 "class_date": "2026-06-14",
                 "period": AttendanceRecord.Period.MORNING,
                 "photo_url": "https://example.com/photo.jpg",
-                "shared_group": str(self.create_group().id),
+                "shared_group": str(group.id),
                 "points_granted": 12,
                 "is_valid": False,
             },
@@ -183,3 +185,85 @@ class AttendanceRecordApiTests(APITestCase):
         self.assertEqual(record.user, user)
         self.assertEqual(record.points_granted, 10)
         self.assertTrue(record.is_valid)
+
+    def test_create_generates_point_transaction(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": "https://example.com/photo.jpg",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = AttendanceRecord.objects.get(id=response.data["id"])
+        transaction = PointTransaction.objects.get(attendance_record=record)
+        self.assertEqual(transaction.user, user)
+        self.assertEqual(transaction.points, 10)
+        self.assertEqual(
+            transaction.source_type,
+            PointTransaction.ActivityType.ATTENDANCE,
+        )
+
+    def test_create_updates_user_progress_points_and_streak(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": "https://example.com/photo.jpg",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        progress = UserProgress.objects.get(user=user)
+        self.assertEqual(progress.total_points, 10)
+        self.assertEqual(progress.current_streak, 1)
+        self.assertEqual(progress.longest_streak, 1)
+        self.assertEqual(progress.last_valid_activity_date, date(2026, 6, 14))
+
+    def test_create_with_shared_group_sets_transaction_study_group(self):
+        user = self.create_user()
+        group = self.create_group()
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": "https://example.com/photo.jpg",
+                "shared_group": str(group.id),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = AttendanceRecord.objects.get(id=response.data["id"])
+        transaction = PointTransaction.objects.get(attendance_record=record)
+        self.assertEqual(transaction.study_group, group)
+
+    def test_point_transactions_cannot_be_created_by_public_post(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/point-transactions/",
+            {
+                "points": 10,
+                "reason": "Tentativa manual",
+                "source_type": PointTransaction.ActivityType.ATTENDANCE,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
