@@ -65,7 +65,9 @@ class UserProgress(models.Model):
             and self.longest_streak is not None
             and self.longest_streak < self.current_streak
         ):
-            errors["longest_streak"] = "Maior sequencia deve ser maior ou igual a atual."
+            errors["longest_streak"] = (
+                "Maior sequencia deve ser maior ou igual a atual."
+            )
 
         if errors:
             raise ValidationError(errors)
@@ -111,3 +113,122 @@ class UserProgress(models.Model):
 
     def __str__(self):
         return f"UserProgress(user_id={self.user_id}, total_points={self.total_points})"
+
+
+class PointTransaction(models.Model):
+    class ActivityType(models.TextChoices):
+        ATTENDANCE = "ATTENDANCE", "Attendance"
+        STUDY_SESSION = "STUDY_SESSION", "Study session"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="point_transactions",
+    )
+    points = models.IntegerField()
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    source_type = models.CharField(
+        max_length=20,
+        choices=ActivityType.choices,
+    )
+    attendance_record = models.ForeignKey(
+        "attendance.AttendanceRecord",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="point_transactions_from_attendance",
+    )
+    study_session = models.ForeignKey(
+        "study.StudySession",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="point_transactions_from_study_session",
+    )
+    study_group = models.ForeignKey(
+        "groups.StudyGroup",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="point_transactions_from_group",
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(points=0),
+                name="point_transaction_points_not_zero",
+            ),
+        ]
+
+    def clean(self):
+        errors = {}
+
+        if self.points == 0:
+            errors["points"] = "Pontos nao podem ser zero."
+
+        if not self.reason or not str(self.reason).strip():
+            errors["reason"] = "Motivo e obrigatorio."
+
+        if self.attendance_record_id and self.study_session_id:
+            errors["study_session"] = (
+                "AttendanceRecord e StudySession nao podem ser usados ao mesmo tempo."
+            )
+
+        if self.source_type == self.ActivityType.ATTENDANCE:
+            if not self.attendance_record_id:
+                errors["attendance_record"] = (
+                    "AttendanceRecord e obrigatorio para transacao de attendance."
+                )
+            if self.study_session_id:
+                errors["study_session"] = (
+                    "StudySession deve ficar vazio para transacao de attendance."
+                )
+
+        if self.source_type == self.ActivityType.STUDY_SESSION:
+            if not self.study_session_id:
+                errors["study_session"] = (
+                    "StudySession e obrigatorio para transacao de estudo."
+                )
+            if self.attendance_record_id:
+                errors["attendance_record"] = (
+                    "AttendanceRecord deve ficar vazio para transacao de estudo."
+                )
+
+        if (
+            self.attendance_record_id
+            and self.user_id
+            and self.attendance_record.user_id != self.user_id
+        ):
+            errors["attendance_record"] = (
+                "AttendanceRecord deve pertencer ao mesmo usuario da transacao."
+            )
+
+        if (
+            self.study_session_id
+            and self.user_id
+            and self.study_session.user_id != self.user_id
+        ):
+            errors["study_session"] = (
+                "StudySession deve pertencer ao mesmo usuario da transacao."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def is_from_attendance(self) -> bool:
+        return self.source_type == self.ActivityType.ATTENDANCE
+
+    def is_from_study_session(self) -> bool:
+        return self.source_type == self.ActivityType.STUDY_SESSION
+
+    def is_group_scoped(self) -> bool:
+        return self.study_group_id is not None
+
+    def __str__(self):
+        return (
+            f"PointTransaction(user_id={self.user_id}, points={self.points}, "
+            f"source_type={self.source_type})"
+        )

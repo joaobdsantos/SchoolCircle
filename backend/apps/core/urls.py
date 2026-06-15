@@ -11,5 +11,6 @@ urlpatterns = [
     path("groups/", include("apps.groups.urls")),
     path("attendance-records/", include("apps.attendance.urls")),
     path("study-sessions/", include("apps.study.urls")),
+    path("point-transactions/", include("apps.gamification.point_transactions_urls")),
     path("user-progress/", include("apps.gamification.urls")),
 ]
