@@ -9,4 +9,6 @@ urlpatterns = [
     path("auth/", include("apps.users.urls")),
     path("academic-profile/", AcademicProfileView.as_view(), name="academic-profile"),
     path("groups/", include("apps.groups.urls")),
+    path("attendance-records/", include("apps.attendance.urls")),
+    path("study-sessions/", include("apps.study.urls")),
 ]
