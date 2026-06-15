@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from apps.groups.models import GroupInvite, GroupMembership, StudyGroup
 
@@ -247,3 +249,88 @@ class GroupInviteModelTests(TestCase):
 
         with self.assertRaises(ValidationError):
             accepted_without_response.full_clean()
+
+
+class StudyGroupApiTests(APITestCase):
+    def create_user(self, email):
+        return User.objects.create_user(
+            email=email,
+            password="12345678",
+            full_name="Test User",
+        )
+
+    def test_authenticated_user_can_create_group(self):
+        user = self.create_user("owner@example.com")
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/groups/",
+            {
+                "name": "Grupo de estudos",
+                "description": "Grupo para testes.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        group = StudyGroup.objects.get(id=response.data["id"])
+        membership = GroupMembership.objects.get(user=user, group=group)
+
+        self.assertEqual(group.name, "Grupo de estudos")
+        self.assertEqual(membership.role, GroupMembership.MembershipRole.OWNER)
+        self.assertTrue(membership.is_active)
+        self.assertEqual(membership.group_points, 0)
+
+    def test_create_group_does_not_accept_membership_role_in_payload(self):
+        user = self.create_user("owner@example.com")
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/groups/",
+            {
+                "name": "Grupo de estudos",
+                "description": "Grupo para testes.",
+                "role": GroupMembership.MembershipRole.MEMBER,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        group = StudyGroup.objects.get(id=response.data["id"])
+        membership = GroupMembership.objects.get(user=user, group=group)
+
+        self.assertEqual(membership.role, GroupMembership.MembershipRole.OWNER)
+        self.assertNotIn("role", response.data)
+
+    def test_unauthenticated_user_cannot_create_group(self):
+        response = self.client.post(
+            "/api/groups/",
+            {
+                "name": "Grupo de estudos",
+                "description": "Grupo para testes.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_group_creation_rolls_back_if_membership_creation_fails(self):
+        from unittest.mock import patch
+
+        user = self.create_user("owner@example.com")
+        self.client.force_authenticate(user=user)
+
+        with patch("apps.groups.views.GroupMembership.objects.create") as mock_create:
+            mock_create.side_effect = IntegrityError("forced failure")
+
+            with self.assertRaises(IntegrityError):
+                self.client.post(
+                    "/api/groups/",
+                    {
+                        "name": "Grupo de estudos",
+                        "description": "Grupo para testes.",
+                    },
+                    format="json",
+                )
+
+        self.assertFalse(StudyGroup.objects.filter(name="Grupo de estudos").exists())
