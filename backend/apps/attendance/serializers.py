@@ -30,13 +30,6 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Photo URL e obrigatoria.")
         return value.strip()
 
-    def validate_points_granted(self, value):
-        if value < 0:
-            raise serializers.ValidationError(
-                "Pontos concedidos nao podem ser negativos."
-            )
-        return value
-
     def validate(self, attrs):
         request = self.context.get("request")
         user = getattr(request, "user", None)
