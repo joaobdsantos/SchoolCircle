@@ -5,3 +5,6 @@ class GamificationConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.gamification"
     verbose_name = "Gamification"
+
+    def ready(self):
+        from apps.gamification import signals  # noqa: F401
