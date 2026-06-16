@@ -4,6 +4,7 @@ import { getUserProgress, listPointTransactions, type PointTransaction, type Use
 
 type ChartPoint = {
   date: string;
+  dateLabel: string;
   points: number;
 };
 
@@ -24,7 +25,10 @@ function buildChartData(transactions: PointTransaction[]): ChartPoint[] {
   });
 
   return Array.from(grouped.entries())
-    .map(([date, points]) => ({ date, points }))
+    .map(([date, points]) => {
+      const [day, month] = date.split("/");
+      return { date, dateLabel: `${day}/${month}`, points };
+    })
     .sort((left, right) => {
       const [ld, lm, ly] = left.date.split("/").map(Number);
       const [rd, rm, ry] = right.date.split("/").map(Number);
@@ -137,7 +141,7 @@ export function ProgressPage() {
                   </div>
                   <div className="chart-label">
                     <div className="chart-value">{item.points}</div>
-                    <div>{item.date}</div>
+                    <div title={item.date}>{item.dateLabel}</div>
                   </div>
                 </div>
               ))}
