@@ -32,6 +32,10 @@ export const publicApi = axios.create({
   timeout: 10000,
 });
 
+export const multipartHeaders = {
+  "Content-Type": "multipart/form-data",
+};
+
 export async function refreshAccessTokenRequest(): Promise<string> {
   const refreshToken = getRefreshToken();
 

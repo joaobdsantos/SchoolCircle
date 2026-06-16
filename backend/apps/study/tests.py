@@ -1,7 +1,26 @@
 from datetime import date
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from rest_framework import status
+from rest_framework.test import APITestCase
+from PIL import Image
+
+from apps.gamification.models import PointTransaction, UserProgress
+from apps.study.models import StudySession
+
+
+User = get_user_model()
+
+from datetime import date
+from io import BytesIO
+
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -13,6 +32,12 @@ User = get_user_model()
 
 
 class StudySessionModelTests(APITestCase):
+    def make_image_file(self, name="study.jpg"):
+        image = Image.new("RGB", (1, 1), color=(0, 0, 255))
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG")
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/jpeg")
+
     def create_user(self, email="ana@example.com"):
         return User.objects.create_user(
             email=email,
@@ -26,7 +51,7 @@ class StudySessionModelTests(APITestCase):
             "user": user,
             "study_date": date(2026, 6, 14),
             "content_description": "Estudo de grafos e Dijkstra",
-            "photo_url": "https://example.com/photo.jpg",
+            "photo_url": self.make_image_file(),
             **extra_fields,
         }
         return StudySession.objects.create(**data)
@@ -55,7 +80,7 @@ class StudySessionModelTests(APITestCase):
             user=self.create_user(),
             study_date=date(2026, 6, 14),
             content_description="",
-            photo_url="https://example.com/photo.jpg",
+            photo_url=self.make_image_file(),
         )
 
         with self.assertRaises(ValidationError):
@@ -66,7 +91,7 @@ class StudySessionModelTests(APITestCase):
             user=self.create_user(),
             study_date=date(2026, 6, 14),
             content_description="Estudo de grafos",
-            photo_url="https://example.com/photo.jpg",
+            photo_url=self.make_image_file(),
             points_granted=-1,
         )
 
@@ -85,6 +110,12 @@ class StudySessionModelTests(APITestCase):
 
 
 class StudySessionApiTests(APITestCase):
+    def make_image_file(self, name="study.jpg"):
+        image = Image.new("RGB", (1, 1), color=(0, 0, 255))
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG")
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/jpeg")
+
     def create_user(self, email="ana@example.com"):
         return User.objects.create_user(
             email=email,
@@ -100,13 +131,13 @@ class StudySessionApiTests(APITestCase):
             user=user_one,
             study_date=date(2026, 6, 14),
             content_description="Estudo A",
-            photo_url="https://example.com/a.jpg",
+            photo_url=self.make_image_file("a.jpg"),
         )
         StudySession.objects.create(
             user=user_two,
             study_date=date(2026, 6, 14),
             content_description="Estudo B",
-            photo_url="https://example.com/b.jpg",
+            photo_url=self.make_image_file("b.jpg"),
         )
 
         response = self.client.get("/api/study-sessions/")
@@ -125,12 +156,12 @@ class StudySessionApiTests(APITestCase):
             {
                 "study_date": "2026-06-14",
                 "content_description": "Estudo de grafos e Dijkstra",
-                "photo_url": "https://example.com/photo.jpg",
+                "photo_url": self.make_image_file(),
                 "user": str(other_user.id),
                 "is_valid": False,
                 "points_granted": 100,
             },
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -150,9 +181,9 @@ class StudySessionApiTests(APITestCase):
             {
                 "study_date": "2026-06-14",
                 "content_description": "Estudo de grafos e Dijkstra",
-                "photo_url": "https://example.com/photo.jpg",
+                "photo_url": self.make_image_file(),
             },
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -174,9 +205,9 @@ class StudySessionApiTests(APITestCase):
             {
                 "study_date": "2026-06-14",
                 "content_description": "Estudo de grafos e Dijkstra",
-                "photo_url": "https://example.com/photo.jpg",
+                "photo_url": self.make_image_file(),
             },
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)

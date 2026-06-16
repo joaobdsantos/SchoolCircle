@@ -26,14 +26,7 @@ class StudySessionSerializer(serializers.ModelSerializer):
 
     def validate_content_description(self, value):
         if not value or not value.strip():
-            raise serializers.ValidationError(
-                "Descricao do estudo e obrigatoria."
-            )
-        return value.strip()
-
-    def validate_photo_url(self, value):
-        if not value or not value.strip():
-            raise serializers.ValidationError("Photo URL e obrigatoria.")
+            raise serializers.ValidationError("Descricao do estudo e obrigatoria.")
         return value.strip()
 
     def validate(self, attrs):

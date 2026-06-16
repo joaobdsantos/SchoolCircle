@@ -334,3 +334,221 @@ class StudyGroupApiTests(APITestCase):
                 )
 
         self.assertFalse(StudyGroup.objects.filter(name="Grupo de estudos").exists())
+
+
+class GroupInviteApiTests(APITestCase):
+    def create_user(self, email):
+        return User.objects.create_user(
+            email=email,
+            password="12345678",
+            full_name="Test User",
+        )
+
+    def create_group_with_owner(self, owner_email="owner@example.com"):
+        owner = self.create_user(owner_email)
+        group = StudyGroup.objects.create(
+            name="Grupo de estudos",
+            description="Grupo para testes.",
+        )
+        GroupMembership.objects.create(
+            user=owner,
+            group=group,
+            role=GroupMembership.MembershipRole.OWNER,
+        )
+        return owner, group
+
+    def test_owner_can_create_invite(self):
+        owner, group = self.create_group_with_owner()
+        recipient = self.create_user("member@example.com")
+        self.client.force_authenticate(user=owner)
+
+        response = self.client.post(
+            "/api/groups/invites/",
+            {
+                "group": str(group.id),
+                "sent_to_email": recipient.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["sent_by"], owner.id)
+        self.assertEqual(response.data["sent_to"], recipient.id)
+        self.assertEqual(response.data["group"], group.id)
+        self.assertEqual(response.data["status"], GroupInvite.InviteStatus.PENDING)
+
+    def test_non_owner_cannot_create_invite(self):
+        owner, group = self.create_group_with_owner()
+        member = self.create_user("member@example.com")
+        GroupMembership.objects.create(user=member, group=group)
+        recipient = self.create_user("destinatario@example.com")
+        self.client.force_authenticate(user=member)
+
+        response = self.client.post(
+            "/api/groups/invites/",
+            {
+                "group": str(group.id),
+                "sent_to_email": recipient.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_invite_rejects_unknown_email(self):
+        owner, group = self.create_group_with_owner()
+        self.client.force_authenticate(user=owner)
+
+        response = self.client.post(
+            "/api/groups/invites/",
+            {
+                "group": str(group.id),
+                "sent_to_email": "missing@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_recipient_can_accept_invite_and_create_membership(self):
+        owner, group = self.create_group_with_owner()
+        recipient = self.create_user("member@example.com")
+        invite = GroupInvite.objects.create(
+            group=group,
+            sent_by=owner,
+            sent_to=recipient,
+        )
+        self.client.force_authenticate(user=recipient)
+
+        response = self.client.post(f"/api/groups/invites/{invite.id}/accept/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, GroupInvite.InviteStatus.ACCEPTED)
+        self.assertIsNotNone(invite.responded_at)
+        membership = GroupMembership.objects.get(user=recipient, group=group)
+        self.assertTrue(membership.is_active)
+
+    def test_pending_invites_list_only_returns_recipient_invites(self):
+        owner, group = self.create_group_with_owner()
+        recipient = self.create_user("member@example.com")
+        other_user = self.create_user("outra@example.com")
+        GroupInvite.objects.create(group=group, sent_by=owner, sent_to=recipient)
+        GroupInvite.objects.create(group=group, sent_by=owner, sent_to=other_user)
+        self.client.force_authenticate(user=recipient)
+
+        response = self.client.get("/api/groups/invites/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["sent_to"], recipient.id)
+
+
+class GroupMembershipApiTests(APITestCase):
+    def create_user(self, email):
+        return User.objects.create_user(
+            email=email,
+            password="12345678",
+            full_name="Test User",
+        )
+
+    def create_group_with_members(self):
+        owner = self.create_user("owner@example.com")
+        member = self.create_user("member@example.com")
+        other = self.create_user("other@example.com")
+        group = StudyGroup.objects.create(
+            name="Grupo de estudos",
+            description="Grupo para testes.",
+        )
+        owner_membership = GroupMembership.objects.create(
+            user=owner,
+            group=group,
+            role=GroupMembership.MembershipRole.OWNER,
+            group_points=50,
+        )
+        member_membership = GroupMembership.objects.create(
+            user=member,
+            group=group,
+            role=GroupMembership.MembershipRole.MEMBER,
+            group_points=30,
+        )
+        GroupMembership.objects.create(user=other, group=group, group_points=10)
+        return group, owner_membership, member_membership, owner, member
+
+    def test_member_can_list_group_members(self):
+        group, owner_membership, member_membership, owner, member = (
+            self.create_group_with_members()
+        )
+        self.client.force_authenticate(user=member)
+
+        response = self.client.get(f"/api/groups/{group.id}/members/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 3)
+        self.assertEqual(response.data[0]["group_points"], 50)
+
+    def test_non_member_cannot_list_group_members(self):
+        group, owner_membership, member_membership, owner, member = (
+            self.create_group_with_members()
+        )
+        outsider = self.create_user("outsider@example.com")
+        self.client.force_authenticate(user=outsider)
+
+        response = self.client.get(f"/api/groups/{group.id}/members/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_member_can_leave_group_but_owner_cannot(self):
+        group, owner_membership, member_membership, owner, member = (
+            self.create_group_with_members()
+        )
+        self.client.force_authenticate(user=member)
+
+        response = self.client.delete(
+            f"/api/groups/{group.id}/members/{member_membership.id}/leave/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        member_membership.refresh_from_db()
+        self.assertFalse(member_membership.is_active)
+
+        self.client.force_authenticate(user=owner)
+        response = self.client.delete(
+            f"/api/groups/{group.id}/members/{owner_membership.id}/leave/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class GroupRankingApiTests(APITestCase):
+    def create_user(self, email):
+        return User.objects.create_user(
+            email=email,
+            password="12345678",
+            full_name="Test User",
+        )
+
+    def test_ranking_is_public_and_ordered_by_points(self):
+        group = StudyGroup.objects.create(
+            name="Grupo de estudos",
+            description="Grupo para testes.",
+        )
+        first = self.create_user("first@example.com")
+        second = self.create_user("second@example.com")
+        GroupMembership.objects.create(
+            user=first,
+            group=group,
+            group_points=30,
+        )
+        GroupMembership.objects.create(
+            user=second,
+            group=group,
+            group_points=60,
+        )
+
+        response = self.client.get(f"/api/groups/{group.id}/ranking/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0]["rank"], 1)
+        self.assertEqual(response.data[0]["user_id"], str(second.id))
+        self.assertEqual(response.data[1]["rank"], 2)

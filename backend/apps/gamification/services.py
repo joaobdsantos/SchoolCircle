@@ -1,6 +1,7 @@
 from django.db import transaction
 
 from apps.gamification.models import PointTransaction, UserProgress
+from apps.groups.models import GroupMembership
 
 
 class PointsService:
@@ -30,6 +31,23 @@ class PointsService:
             progress, _ = UserProgress.objects.get_or_create(user=user)
             progress.add_points(points)
             progress.update_streak(activity_date)
+
+            if getattr(activity, "shared_group_id", None):
+                membership = (
+                    GroupMembership.objects.select_for_update()
+                    .filter(
+                        user=user,
+                        group_id=activity.shared_group_id,
+                        is_active=True,
+                    )
+                    .first()
+                )
+
+                if membership is None:
+                    raise ValueError("Membro ativo do grupo nao encontrado.")
+
+                membership.group_points += points
+                membership.save(update_fields=["group_points"])
 
         return point_transaction
 

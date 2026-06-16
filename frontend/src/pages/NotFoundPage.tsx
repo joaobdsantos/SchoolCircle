@@ -7,7 +7,7 @@ export function NotFoundPage() {
       <p className="eyebrow">404</p>
       <h2>Página não encontrada</h2>
       <p>Esta rota ainda não existe no MVP inicial.</p>
-      <Link to="/">Voltar para a home</Link>
+      <Link to="/home">Voltar para a home</Link>
     </section>
   );
 }

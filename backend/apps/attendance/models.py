@@ -29,7 +29,7 @@ class AttendanceRecord(models.Model):
     )
     class_date = models.DateField()
     period = models.CharField(max_length=20, choices=Period.choices)
-    photo_url = models.URLField(max_length=500)
+    photo_url = models.ImageField(upload_to="attendance_photos/")
     registered_at = models.DateTimeField(auto_now_add=True)
     is_valid = models.BooleanField(default=True)
     points_granted = models.PositiveIntegerField(
@@ -53,7 +53,7 @@ class AttendanceRecord(models.Model):
         errors = {}
 
         if not self.photo_url or not str(self.photo_url).strip():
-            errors["photo_url"] = "Photo URL e obrigatoria."
+            errors["photo_url"] = "Foto e obrigatoria."
 
         if self.points_granted is not None and self.points_granted < 0:
             errors["points_granted"] = "Pontos concedidos nao podem ser negativos."

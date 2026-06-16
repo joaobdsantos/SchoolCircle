@@ -15,7 +15,7 @@ class StudySession(models.Model):
     )
     study_date = models.DateField()
     content_description = models.TextField()
-    photo_url = models.URLField(max_length=500)
+    photo_url = models.ImageField(upload_to="study_photos/")
     registered_at = models.DateTimeField(auto_now_add=True)
     is_valid = models.BooleanField(default=True)
     points_granted = models.PositiveIntegerField(
@@ -38,7 +38,7 @@ class StudySession(models.Model):
             errors["content_description"] = "Descricao do estudo e obrigatoria."
 
         if not self.photo_url or not str(self.photo_url).strip():
-            errors["photo_url"] = "Photo URL e obrigatoria."
+            errors["photo_url"] = "Foto e obrigatoria."
 
         if self.points_granted is not None and self.points_granted < 0:
             errors["points_granted"] = "Pontos concedidos nao podem ser negativos."

@@ -25,11 +25,6 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "points_granted",
         )
 
-    def validate_photo_url(self, value):
-        if not value or not value.strip():
-            raise serializers.ValidationError("Photo URL e obrigatoria.")
-        return value.strip()
-
     def validate(self, attrs):
         request = self.context.get("request")
         user = getattr(request, "user", None)

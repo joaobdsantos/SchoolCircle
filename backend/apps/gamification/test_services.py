@@ -214,6 +214,9 @@ class PointsServiceTests(APITestCase):
     def test_attendance_transaction_uses_shared_group(self):
         user = self.create_user()
         group = self.create_group()
+        from apps.groups.models import GroupMembership
+
+        GroupMembership.objects.create(user=user, group=group)
         attendance = self.create_attendance_record(user, shared_group=group)
 
         point_transaction = PointsService.grant_points(
@@ -223,6 +226,23 @@ class PointsServiceTests(APITestCase):
         )
 
         self.assertEqual(point_transaction.study_group, group)
+
+    def test_grant_points_updates_group_membership_points(self):
+        user = self.create_user()
+        group = self.create_group()
+        from apps.groups.models import GroupMembership
+
+        membership = GroupMembership.objects.create(user=user, group=group)
+        attendance = self.create_attendance_record(user, shared_group=group)
+
+        PointsService.grant_points(
+            user=user,
+            activity=attendance,
+            strategy=AttendancePointsStrategy(),
+        )
+
+        membership.refresh_from_db()
+        self.assertEqual(membership.group_points, 10)
 
     def test_invalid_activity_does_not_create_transaction(self):
         user = self.create_user()

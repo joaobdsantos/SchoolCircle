@@ -5,10 +5,11 @@ from apps.attendance.models import AttendanceRecord
 from apps.attendance.serializers import AttendanceRecordSerializer
 from apps.gamification.services import PointsService
 from apps.gamification.strategies import AttendancePointsStrategy
+from apps.groups.permissions import IsActiveGroupMember
 
 
 class AttendanceRecordListCreateView(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsActiveGroupMember]
     serializer_class = AttendanceRecordSerializer
 
     def get_queryset(self):

@@ -9,6 +9,14 @@ import { NotFoundPage } from "../pages/NotFoundPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { AcademicProfilePage } from "../pages/AcademicProfilePage";
 import { EditProfilePage } from "../pages/EditProfilePage";
+import { PresencePage } from "../pages/PresencePage";
+import { StudySessionPage } from "../pages/StudySessionPage";
+import { ProgressPage } from "../pages/ProgressPage";
+import { GroupsPage } from "../pages/GroupsPage";
+import { GroupMembersPage } from "../pages/GroupMembersPage";
+import { GroupRankingPage } from "../pages/GroupRankingPage";
+import { HistoryPage } from "../pages/HistoryPage";
+import { InvitesPage } from "../pages/InvitesPage";
 import { ACCESS_TOKEN_KEY } from "../services/auth";
 
 export function AppRoutes() {
@@ -55,6 +63,70 @@ export function AppRoutes() {
           element={
             <ProtectedRoute>
               <EditProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="presence"
+          element={
+            <ProtectedRoute>
+              <PresencePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="study-sessions"
+          element={
+            <ProtectedRoute>
+              <StudySessionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="progress"
+          element={
+            <ProtectedRoute>
+              <ProgressPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="groups"
+          element={
+            <ProtectedRoute>
+              <GroupsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="groups/:groupId/members"
+          element={
+            <ProtectedRoute>
+              <GroupMembersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="groups/:groupId/ranking"
+          element={
+            <ProtectedRoute>
+              <GroupRankingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="history"
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="invites"
+          element={
+            <ProtectedRoute>
+              <InvitesPage />
             </ProtectedRoute>
           }
         />
