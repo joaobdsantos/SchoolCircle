@@ -1,11 +1,15 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.groups.commands import (
+    AcceptGroupInviteCommand,
+    CancelGroupInviteCommand,
+    DeclineGroupInviteCommand,
+)
 from apps.groups.models import GroupInvite, GroupMembership, StudyGroup
 from apps.groups.permissions import IsActiveGroupMember
 from apps.groups.serializers import (
@@ -26,11 +30,6 @@ def _get_active_membership(user, group):
         .select_related("user", "group")
         .first()
     )
-
-
-def _ensure_pending_invite(invite):
-    if invite.status != GroupInvite.InviteStatus.PENDING:
-        raise ValidationError("Apenas convites pendentes podem ser respondidos.")
 
 
 class StudyGroupListCreateView(generics.ListCreateAPIView):
@@ -103,8 +102,7 @@ class GroupInviteDetailView(generics.RetrieveAPIView):
 
 class GroupInviteActionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    invite_status = None
-    requires_sender = False
+    command_class = None
 
     def post(self, request, invite_id):
         with transaction.atomic():
@@ -117,63 +115,23 @@ class GroupInviteActionView(APIView):
                 id=invite_id,
             )
 
-            self._validate_actor(request, invite)
-            _ensure_pending_invite(invite)
-
-            if self.invite_status == GroupInvite.InviteStatus.ACCEPTED:
-                self._accept_invite(invite)
-            else:
-                invite.status = self.invite_status
-                invite.responded_at = timezone.now()
-                invite.save(update_fields=["status", "responded_at"])
+            invite = self.command_class(invite=invite, actor=request.user).execute()
 
             return Response(
                 GroupInviteSerializer(invite).data, status=status.HTTP_200_OK
             )
 
-    def _validate_actor(self, request, invite):
-        if self.requires_sender:
-            if invite.sent_by_id != request.user.id:
-                raise PermissionDenied("Apenas quem enviou o convite pode cancelá-lo.")
-            return
-
-        if invite.sent_to_id != request.user.id:
-            raise PermissionDenied("Apenas o destinatario pode responder ao convite.")
-
-    def _accept_invite(self, invite):
-        membership = GroupMembership.objects.filter(
-            user=invite.sent_to,
-            group=invite.group,
-        ).first()
-
-        if membership is None:
-            GroupMembership.objects.create(
-                user=invite.sent_to,
-                group=invite.group,
-                role=GroupMembership.MembershipRole.MEMBER,
-                is_active=True,
-            )
-        else:
-            membership.role = GroupMembership.MembershipRole.MEMBER
-            membership.is_active = True
-            membership.save(update_fields=["role", "is_active"])
-
-        invite.status = self.invite_status
-        invite.responded_at = timezone.now()
-        invite.save(update_fields=["status", "responded_at"])
-
 
 class GroupInviteAcceptView(GroupInviteActionView):
-    invite_status = GroupInvite.InviteStatus.ACCEPTED
+    command_class = AcceptGroupInviteCommand
 
 
 class GroupInviteDeclineView(GroupInviteActionView):
-    invite_status = GroupInvite.InviteStatus.DECLINED
+    command_class = DeclineGroupInviteCommand
 
 
 class GroupInviteCancelView(GroupInviteActionView):
-    invite_status = GroupInvite.InviteStatus.CANCELED
-    requires_sender = True
+    command_class = CancelGroupInviteCommand
 
 
 class GroupMembershipListView(generics.ListAPIView):

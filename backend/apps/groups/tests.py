@@ -3,9 +3,18 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.exceptions import (
+    PermissionDenied as DRFPermissionDenied,
+    ValidationError as DRFValidationError,
+)
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.groups.commands import (
+    AcceptGroupInviteCommand,
+    CancelGroupInviteCommand,
+    DeclineGroupInviteCommand,
+)
 from apps.groups.models import GroupInvite, GroupMembership, StudyGroup
 
 
@@ -249,6 +258,114 @@ class GroupInviteModelTests(TestCase):
 
         with self.assertRaises(ValidationError):
             accepted_without_response.full_clean()
+
+
+class GroupInviteCommandTests(TestCase):
+    def create_user(self, email):
+        return User.objects.create_user(
+            email=email,
+            password="12345678",
+            full_name="Test User",
+        )
+
+    def create_group(self):
+        return StudyGroup.objects.create(
+            name="Grupo de estudos",
+            description="Grupo para testes.",
+        )
+
+    def create_invite(self, group=None, sent_by=None, sent_to=None, **extra_fields):
+        group = group or self.create_group()
+        sent_by = sent_by or self.create_user("owner@example.com")
+        sent_to = sent_to or self.create_user("member@example.com")
+        return GroupInvite.objects.create(
+            group=group,
+            sent_by=sent_by,
+            sent_to=sent_to,
+            **extra_fields,
+        )
+
+    def test_accept_command_accepts_pending_invite_and_creates_membership(self):
+        invite = self.create_invite()
+
+        result = AcceptGroupInviteCommand(
+            invite=invite,
+            actor=invite.sent_to,
+        ).execute()
+
+        result.refresh_from_db()
+        self.assertEqual(result.status, GroupInvite.InviteStatus.ACCEPTED)
+        self.assertIsNotNone(result.responded_at)
+        membership = GroupMembership.objects.get(
+            user=invite.sent_to,
+            group=invite.group,
+        )
+        self.assertTrue(membership.is_active)
+        self.assertEqual(membership.role, GroupMembership.MembershipRole.MEMBER)
+
+    def test_accept_command_reactivates_existing_membership(self):
+        invite = self.create_invite()
+        membership = GroupMembership.objects.create(
+            user=invite.sent_to,
+            group=invite.group,
+            role=GroupMembership.MembershipRole.OWNER,
+            is_active=False,
+        )
+
+        AcceptGroupInviteCommand(invite=invite, actor=invite.sent_to).execute()
+
+        membership.refresh_from_db()
+        self.assertTrue(membership.is_active)
+        self.assertEqual(membership.role, GroupMembership.MembershipRole.MEMBER)
+
+    def test_decline_command_declines_pending_invite(self):
+        invite = self.create_invite()
+
+        result = DeclineGroupInviteCommand(
+            invite=invite,
+            actor=invite.sent_to,
+        ).execute()
+
+        result.refresh_from_db()
+        self.assertEqual(result.status, GroupInvite.InviteStatus.DECLINED)
+        self.assertIsNotNone(result.responded_at)
+
+    def test_cancel_command_cancels_pending_invite(self):
+        invite = self.create_invite()
+
+        result = CancelGroupInviteCommand(
+            invite=invite,
+            actor=invite.sent_by,
+        ).execute()
+
+        result.refresh_from_db()
+        self.assertEqual(result.status, GroupInvite.InviteStatus.CANCELED)
+        self.assertIsNotNone(result.responded_at)
+
+    def test_command_blocks_non_pending_invite(self):
+        invite = self.create_invite(
+            status=GroupInvite.InviteStatus.DECLINED,
+            responded_at=timezone.now(),
+        )
+
+        with self.assertRaises(DRFValidationError):
+            AcceptGroupInviteCommand(invite=invite, actor=invite.sent_to).execute()
+
+    def test_accept_and_decline_commands_block_wrong_actor(self):
+        invite = self.create_invite()
+        other_user = self.create_user("other@example.com")
+
+        with self.assertRaises(DRFPermissionDenied):
+            AcceptGroupInviteCommand(invite=invite, actor=other_user).execute()
+
+        with self.assertRaises(DRFPermissionDenied):
+            DeclineGroupInviteCommand(invite=invite, actor=other_user).execute()
+
+    def test_cancel_command_blocks_wrong_actor(self):
+        invite = self.create_invite()
+
+        with self.assertRaises(DRFPermissionDenied):
+            CancelGroupInviteCommand(invite=invite, actor=invite.sent_to).execute()
 
 
 class StudyGroupApiTests(APITestCase):
