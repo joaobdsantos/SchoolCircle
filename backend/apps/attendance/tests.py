@@ -3,21 +3,21 @@ from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
-from PIL import Image
 
 from apps.attendance.models import AttendanceRecord
 from apps.gamification.models import PointTransaction, UserProgress
-from apps.groups.models import StudyGroup
+from apps.groups.models import GroupMembership, StudyGroup
 
 
 User = get_user_model()
 
 
-class AttendanceRecordModelTests(APITestCase):
+class AttendanceTestMixin:
     def make_image_file(self, name="attendance.jpg"):
         image = Image.new("RGB", (1, 1), color=(255, 0, 0))
         buffer = BytesIO()
@@ -48,324 +48,272 @@ class AttendanceRecordModelTests(APITestCase):
         }
         return AttendanceRecord.objects.create(**data)
 
+
+class AttendanceRecordModelTests(AttendanceTestMixin, APITestCase):
     def test_create_global_attendance_record(self):
         record = self.create_record(shared_group=None)
 
         self.assertIsNone(record.shared_group)
         self.assertTrue(record.is_valid)
         self.assertEqual(record.points_granted, 10)
-        from datetime import date
-        from io import BytesIO
+        self.assertIsNotNone(record.registered_at)
 
-        from django.contrib.auth import get_user_model
-        from django.core.exceptions import ValidationError
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        from django.db import IntegrityError, transaction
-        from PIL import Image
-        from rest_framework import status
-        from rest_framework.test import APITestCase
+    def test_create_attendance_record_for_group(self):
+        group = self.create_group()
+        record = self.create_record(shared_group=group)
 
-        from apps.attendance.models import AttendanceRecord
-        from apps.gamification.models import PointTransaction, UserProgress
-        from apps.groups.models import StudyGroup
+        self.assertEqual(record.shared_group, group)
 
-        User = get_user_model()
+    def test_photo_url_is_required(self):
+        record = AttendanceRecord(
+            user=self.create_user(),
+            class_date=date(2026, 6, 14),
+            period=AttendanceRecord.Period.MORNING,
+            photo_url="",
+        )
 
-        class AttendanceRecordModelTests(APITestCase):
-            def make_image_file(self, name="attendance.jpg"):
-                image = Image.new("RGB", (1, 1), color=(255, 0, 0))
-                buffer = BytesIO()
-                image.save(buffer, format="JPEG")
-                return SimpleUploadedFile(
-                    name, buffer.getvalue(), content_type="image/jpeg"
-                )
+        with self.assertRaises(ValidationError):
+            record.full_clean()
 
-            def create_user(self, email="ana@example.com"):
-                return User.objects.create_user(
-                    email=email,
-                    password="12345678",
-                    full_name="Ana Silva",
-                )
+    def test_duplicate_user_date_period_is_blocked(self):
+        user = self.create_user()
+        self.create_record(user=user)
 
-            def create_group(self, name="Grupo de estudos"):
-                return StudyGroup.objects.create(
-                    name=name,
-                    description="Grupo para testes.",
-                )
-
-            def create_record(self, **extra_fields):
-                user = extra_fields.pop("user", None) or self.create_user()
-                data = {
-                    "user": user,
-                    "class_date": date(2026, 6, 14),
-                    "period": AttendanceRecord.Period.MORNING,
-                    "photo_url": self.make_image_file(),
-                    **extra_fields,
-                }
-                return AttendanceRecord.objects.create(**data)
-
-            def test_create_global_attendance_record(self):
-                record = self.create_record(shared_group=None)
-
-                self.assertIsNone(record.shared_group)
-                self.assertTrue(record.is_valid)
-                self.assertEqual(record.points_granted, 10)
-                self.assertIsNotNone(record.registered_at)
-
-            def test_create_attendance_record_for_group(self):
-                group = self.create_group()
-                record = self.create_record(shared_group=group)
-
-                self.assertEqual(record.shared_group, group)
-
-            def test_photo_url_is_required(self):
-                record = AttendanceRecord(
-                    user=self.create_user(),
-                    class_date=date(2026, 6, 14),
-                    period=AttendanceRecord.Period.MORNING,
-                    photo_url="",
-                )
-
-                with self.assertRaises(ValidationError):
-                    record.full_clean()
-
-            def test_duplicate_user_date_period_is_blocked(self):
-                user = self.create_user()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
                 self.create_record(user=user)
 
-                with self.assertRaises(IntegrityError):
-                    with transaction.atomic():
-                        self.create_record(user=user)
+    def test_same_user_same_date_different_period_is_allowed(self):
+        user = self.create_user()
+        first = self.create_record(user=user, period=AttendanceRecord.Period.MORNING)
+        second = self.create_record(
+            user=user,
+            period=AttendanceRecord.Period.AFTERNOON,
+        )
 
-            def test_same_user_same_date_different_period_is_allowed(self):
-                user = self.create_user()
-                first = self.create_record(
-                    user=user, period=AttendanceRecord.Period.MORNING
-                )
-                second = self.create_record(
-                    user=user,
-                    period=AttendanceRecord.Period.AFTERNOON,
-                )
+        self.assertNotEqual(first.period, second.period)
 
-                self.assertNotEqual(first.period, second.period)
+    def test_different_users_same_date_same_period_are_allowed(self):
+        first = self.create_record(user=self.create_user("ana@example.com"))
+        second = self.create_record(user=self.create_user("bia@example.com"))
 
-            def test_different_users_same_date_same_period_are_allowed(self):
-                first = self.create_record(user=self.create_user("ana@example.com"))
-                second = self.create_record(user=self.create_user("bia@example.com"))
+        self.assertNotEqual(first.user_id, second.user_id)
 
-                self.assertNotEqual(first.user_id, second.user_id)
+    def test_points_granted_cannot_be_negative(self):
+        record = AttendanceRecord(
+            user=self.create_user(),
+            class_date=date(2026, 6, 14),
+            period=AttendanceRecord.Period.MORNING,
+            photo_url=self.make_image_file(),
+            points_granted=-1,
+        )
 
-            def test_points_granted_cannot_be_negative(self):
-                record = AttendanceRecord(
-                    user=self.create_user(),
-                    class_date=date(2026, 6, 14),
-                    period=AttendanceRecord.Period.MORNING,
-                    photo_url=self.make_image_file(),
-                    points_granted=-1,
-                )
+        with self.assertRaises(ValidationError):
+            record.full_clean()
 
-                with self.assertRaises(ValidationError):
-                    record.full_clean()
+    def test_grant_points_returns_points_when_valid(self):
+        record = self.create_record(points_granted=15, is_valid=True)
 
-            def test_grant_points_returns_points_when_valid(self):
-                record = self.create_record(points_granted=15, is_valid=True)
+        self.assertEqual(record.grant_points(), 15)
 
-                self.assertEqual(record.grant_points(), 15)
+    def test_grant_points_returns_zero_when_invalid(self):
+        record = self.create_record(points_granted=15, is_valid=False)
 
-            def test_grant_points_returns_zero_when_invalid(self):
-                record = self.create_record(points_granted=15, is_valid=False)
+        self.assertEqual(record.grant_points(), 0)
 
-                self.assertEqual(record.grant_points(), 0)
+    def test_validate_record_returns_boolean(self):
+        valid_record = self.create_record()
+        invalid_record = AttendanceRecord(
+            user=self.create_user("outro@example.com"),
+            class_date=date(2026, 6, 14),
+            period=AttendanceRecord.Period.NIGHT,
+            photo_url="",
+        )
 
-            def test_validate_record_returns_boolean(self):
-                valid_record = self.create_record()
-                invalid_record = AttendanceRecord(
-                    user=self.create_user("outro@example.com"),
-                    class_date=date(2026, 6, 14),
-                    period=AttendanceRecord.Period.NIGHT,
-                    photo_url="",
-                )
+        self.assertTrue(valid_record.validate_record())
+        self.assertFalse(invalid_record.validate_record())
 
-                self.assertTrue(valid_record.validate_record())
-                self.assertFalse(invalid_record.validate_record())
 
-        class AttendanceRecordApiTests(APITestCase):
-            def make_image_file(self, name="attendance.jpg"):
-                image = Image.new("RGB", (1, 1), color=(255, 0, 0))
-                buffer = BytesIO()
-                image.save(buffer, format="JPEG")
-                return SimpleUploadedFile(
-                    name, buffer.getvalue(), content_type="image/jpeg"
-                )
+class AttendanceRecordApiTests(AttendanceTestMixin, APITestCase):
+    def test_list_returns_only_authenticated_user_records(self):
+        user_one = self.create_user("ana@example.com")
+        user_two = self.create_user("bia@example.com")
+        self.client.force_authenticate(user=user_one)
+        AttendanceRecord.objects.create(
+            user=user_one,
+            class_date=date(2026, 6, 14),
+            period=AttendanceRecord.Period.MORNING,
+            photo_url=self.make_image_file("a.jpg"),
+        )
+        AttendanceRecord.objects.create(
+            user=user_two,
+            class_date=date(2026, 6, 14),
+            period=AttendanceRecord.Period.AFTERNOON,
+            photo_url=self.make_image_file("b.jpg"),
+        )
 
-            def create_user(self, email="ana@example.com"):
-                return User.objects.create_user(
-                    email=email,
-                    password="12345678",
-                    full_name="Ana Silva",
-                )
+        response = self.client.get("/api/attendance-records/")
 
-            def create_group(self, name="Grupo de estudos"):
-                return StudyGroup.objects.create(
-                    name=name,
-                    description="Grupo para testes.",
-                )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["period"], AttendanceRecord.Period.MORNING)
 
-            def test_list_returns_only_authenticated_user_records(self):
-                user_one = self.create_user("ana@example.com")
-                user_two = self.create_user("bia@example.com")
-                self.client.force_authenticate(user=user_one)
-                AttendanceRecord.objects.create(
-                    user=user_one,
-                    class_date=date(2026, 6, 14),
-                    period=AttendanceRecord.Period.MORNING,
-                    photo_url=self.make_image_file("a.jpg"),
-                )
-                AttendanceRecord.objects.create(
-                    user=user_two,
-                    class_date=date(2026, 6, 14),
-                    period=AttendanceRecord.Period.AFTERNOON,
-                    photo_url=self.make_image_file("b.jpg"),
-                )
+    def test_create_binds_record_to_request_user(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
 
-                response = self.client.get("/api/attendance-records/")
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": self.make_image_file(),
+                "points_granted": 12,
+                "is_valid": False,
+            },
+            format="multipart",
+        )
 
-                self.assertEqual(response.status_code, status.HTTP_200_OK)
-                self.assertEqual(len(response.data), 1)
-                self.assertEqual(
-                    response.data[0]["period"], AttendanceRecord.Period.MORNING
-                )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["points_granted"], 10)
+        self.assertTrue(response.data["is_valid"])
+        record = AttendanceRecord.objects.get(id=response.data["id"])
+        self.assertEqual(record.user, user)
+        self.assertEqual(record.points_granted, 10)
+        self.assertTrue(record.is_valid)
 
-            def test_create_binds_record_to_request_user(self):
-                user = self.create_user()
-                self.client.force_authenticate(user=user)
+    def test_create_duplicate_user_date_period_returns_400(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
+        payload = {
+            "class_date": "2026-06-14",
+            "period": AttendanceRecord.Period.MORNING,
+        }
 
-                response = self.client.post(
-                    "/api/attendance-records/",
-                    {
-                        "class_date": "2026-06-14",
-                        "period": AttendanceRecord.Period.MORNING,
-                        "photo_url": self.make_image_file(),
-                        "points_granted": 12,
-                        "is_valid": False,
-                    },
-                    format="multipart",
-                )
+        first_response = self.client.post(
+            "/api/attendance-records/",
+            {
+                **payload,
+                "photo_url": self.make_image_file("first.jpg"),
+            },
+            format="multipart",
+        )
+        second_response = self.client.post(
+            "/api/attendance-records/",
+            {
+                **payload,
+                "photo_url": self.make_image_file("second.jpg"),
+            },
+            format="multipart",
+        )
 
-                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-                self.assertEqual(response.data["points_granted"], 10)
-                self.assertTrue(response.data["is_valid"])
-                record = AttendanceRecord.objects.get(id=response.data["id"])
-                self.assertEqual(record.user, user)
-                self.assertEqual(record.points_granted, 10)
-                self.assertTrue(record.is_valid)
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            second_response.data["non_field_errors"][0],
+            "Presença já registrada para esta data e período.",
+        )
 
-            def test_create_generates_point_transaction(self):
-                user = self.create_user()
-                self.client.force_authenticate(user=user)
+    def test_create_generates_point_transaction(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
 
-                response = self.client.post(
-                    "/api/attendance-records/",
-                    {
-                        "class_date": "2026-06-14",
-                        "period": AttendanceRecord.Period.MORNING,
-                        "photo_url": self.make_image_file(),
-                    },
-                    format="multipart",
-                )
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": self.make_image_file(),
+            },
+            format="multipart",
+        )
 
-                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-                record = AttendanceRecord.objects.get(id=response.data["id"])
-                transaction = PointTransaction.objects.get(attendance_record=record)
-                self.assertEqual(transaction.user, user)
-                self.assertEqual(transaction.points, 10)
-                self.assertEqual(
-                    transaction.source_type,
-                    PointTransaction.ActivityType.ATTENDANCE,
-                )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = AttendanceRecord.objects.get(id=response.data["id"])
+        transaction = PointTransaction.objects.get(attendance_record=record)
+        self.assertEqual(transaction.user, user)
+        self.assertEqual(transaction.points, 10)
+        self.assertEqual(
+            transaction.source_type,
+            PointTransaction.ActivityType.ATTENDANCE,
+        )
 
-            def test_create_updates_user_progress_points_and_streak(self):
-                user = self.create_user()
-                self.client.force_authenticate(user=user)
+    def test_create_updates_user_progress_points_and_streak(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
 
-                response = self.client.post(
-                    "/api/attendance-records/",
-                    {
-                        "class_date": "2026-06-14",
-                        "period": AttendanceRecord.Period.MORNING,
-                        "photo_url": self.make_image_file(),
-                    },
-                    format="multipart",
-                )
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": self.make_image_file(),
+            },
+            format="multipart",
+        )
 
-                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-                progress = UserProgress.objects.get(user=user)
-                self.assertEqual(progress.total_points, 10)
-                self.assertEqual(progress.current_streak, 1)
-                self.assertEqual(progress.longest_streak, 1)
-                self.assertEqual(progress.last_valid_activity_date, date(2026, 6, 14))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        progress = UserProgress.objects.get(user=user)
+        self.assertEqual(progress.total_points, 10)
+        self.assertEqual(progress.current_streak, 1)
+        self.assertEqual(progress.longest_streak, 1)
+        self.assertEqual(progress.last_valid_activity_date, date(2026, 6, 14))
 
-            def test_create_with_shared_group_sets_transaction_study_group(self):
-                user = self.create_user()
-                group = self.create_group()
-                from apps.groups.models import GroupMembership
+    def test_create_with_shared_group_sets_transaction_study_group(self):
+        user = self.create_user()
+        group = self.create_group()
+        GroupMembership.objects.create(user=user, group=group)
+        self.client.force_authenticate(user=user)
 
-                GroupMembership.objects.create(user=user, group=group)
-                self.client.force_authenticate(user=user)
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": self.make_image_file(),
+                "shared_group": str(group.id),
+            },
+            format="multipart",
+        )
 
-                response = self.client.post(
-                    "/api/attendance-records/",
-                    {
-                        "class_date": "2026-06-14",
-                        "period": AttendanceRecord.Period.MORNING,
-                        "photo_url": self.make_image_file(),
-                        "shared_group": str(group.id),
-                    },
-                    format="multipart",
-                )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = AttendanceRecord.objects.get(id=response.data["id"])
+        transaction = PointTransaction.objects.get(attendance_record=record)
+        self.assertEqual(transaction.study_group, group)
 
-                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-                record = AttendanceRecord.objects.get(id=response.data["id"])
-                transaction = PointTransaction.objects.get(attendance_record=record)
-                self.assertEqual(transaction.study_group, group)
+    def test_create_with_inactive_group_membership_is_blocked(self):
+        user = self.create_user()
+        group = self.create_group()
+        membership = GroupMembership.objects.create(user=user, group=group)
+        membership.is_active = False
+        membership.save(update_fields=["is_active"])
+        self.client.force_authenticate(user=user)
 
-            def test_create_with_inactive_group_membership_is_blocked(self):
-                user = self.create_user()
-                group = self.create_group()
-                from apps.groups.models import GroupMembership
+        response = self.client.post(
+            "/api/attendance-records/",
+            {
+                "class_date": "2026-06-14",
+                "period": AttendanceRecord.Period.MORNING,
+                "photo_url": self.make_image_file(),
+                "shared_group": str(group.id),
+            },
+            format="multipart",
+        )
 
-                membership = GroupMembership.objects.create(user=user, group=group)
-                membership.is_active = False
-                membership.save(update_fields=["is_active"])
-                self.client.force_authenticate(user=user)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-                response = self.client.post(
-                    "/api/attendance-records/",
-                    {
-                        "class_date": "2026-06-14",
-                        "period": AttendanceRecord.Period.MORNING,
-                        "photo_url": self.make_image_file(),
-                        "shared_group": str(group.id),
-                    },
-                    format="multipart",
-                )
+    def test_point_transactions_cannot_be_created_by_public_post(self):
+        user = self.create_user()
+        self.client.force_authenticate(user=user)
 
-                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response = self.client.post(
+            "/api/point-transactions/",
+            {
+                "points": 10,
+                "reason": "Tentativa manual",
+                "source_type": PointTransaction.ActivityType.ATTENDANCE,
+            },
+            format="json",
+        )
 
-            def test_point_transactions_cannot_be_created_by_public_post(self):
-                user = self.create_user()
-                self.client.force_authenticate(user=user)
-
-                response = self.client.post(
-                    "/api/point-transactions/",
-                    {
-                        "points": 10,
-                        "reason": "Tentativa manual",
-                        "source_type": PointTransaction.ActivityType.ATTENDANCE,
-                    },
-                    format="json",
-                )
-
-                self.assertEqual(
-                    response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED
-                )
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)

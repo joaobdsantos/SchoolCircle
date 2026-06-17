@@ -7,9 +7,10 @@ export type AttendancePayload = {
   shared_group?: string;
 };
 
-export type AttendanceRecord = AttendancePayload & {
+export type AttendanceRecord = Omit<AttendancePayload, "photo_url"> & {
   id: string;
   user: string;
+  photo_url: string;
   registered_at: string;
   is_valid: boolean;
   points_granted: number;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { isAxiosError } from "axios";
 
 import { createAttendanceRecord, type AttendanceRecord } from "../services/attendance";
 import { listGroups, type StudyGroup } from "../services/groups";
@@ -13,6 +14,47 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(new Error("Falha ao ler arquivo."));
     reader.readAsDataURL(file);
   });
+}
+
+function collectApiMessages(data: unknown): string[] {
+  if (!data) {
+    return [];
+  }
+
+  if (typeof data === "string") {
+    return [data];
+  }
+
+  if (Array.isArray(data)) {
+    return data.flatMap(collectApiMessages);
+  }
+
+  if (typeof data === "object") {
+    const errorData = data as Record<string, unknown>;
+    const prioritizedMessages = [
+      ...collectApiMessages(errorData.detail),
+      ...collectApiMessages(errorData.non_field_errors),
+    ];
+
+    const fieldMessages = Object.entries(errorData)
+      .filter(([field]) => field !== "detail" && field !== "non_field_errors")
+      .flatMap(([, value]) => collectApiMessages(value));
+
+    return [...prioritizedMessages, ...fieldMessages];
+  }
+
+  return [];
+}
+
+function getPresenceErrorMessage(error: unknown): string {
+  if (isAxiosError(error)) {
+    const messages = collectApiMessages(error.response?.data);
+    if (messages.length > 0) {
+      return messages.join(" ");
+    }
+  }
+
+  return "Erro ao registrar presença. Tente novamente.";
 }
 
 export function PresencePage() {
@@ -100,7 +142,7 @@ export function PresencePage() {
       setPhotoPreview("");
       setPhotoFile(null);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Erro ao registrar presenca.");
+      setError(getPresenceErrorMessage(submitError));
     } finally {
       setIsSubmitting(false);
     }
