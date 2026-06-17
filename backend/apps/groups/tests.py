@@ -376,6 +376,24 @@ class StudyGroupApiTests(APITestCase):
             full_name="Test User",
         )
 
+    def create_group_with_membership(
+        self,
+        user,
+        role=GroupMembership.MembershipRole.MEMBER,
+        is_active=True,
+    ):
+        group = StudyGroup.objects.create(
+            name="Grupo de estudos",
+            description="Grupo para testes.",
+        )
+        GroupMembership.objects.create(
+            user=user,
+            group=group,
+            role=role,
+            is_active=is_active,
+        )
+        return group
+
     def test_authenticated_user_can_create_group(self):
         user = self.create_user("owner@example.com")
         self.client.force_authenticate(user=user)
@@ -451,6 +469,125 @@ class StudyGroupApiTests(APITestCase):
                 )
 
         self.assertFalse(StudyGroup.objects.filter(name="Grupo de estudos").exists())
+
+    def test_owner_can_update_group(self):
+        owner = self.create_user("owner@example.com")
+        group = self.create_group_with_membership(
+            owner,
+            role=GroupMembership.MembershipRole.OWNER,
+        )
+        self.client.force_authenticate(user=owner)
+
+        response = self.client.put(
+            f"/api/groups/{group.id}/",
+            {
+                "name": "Grupo atualizado",
+                "description": "Descricao atualizada.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        group.refresh_from_db()
+        self.assertEqual(group.name, "Grupo atualizado")
+        self.assertEqual(group.description, "Descricao atualizada.")
+
+    def test_active_member_cannot_update_group(self):
+        member = self.create_user("member@example.com")
+        group = self.create_group_with_membership(
+            member,
+            role=GroupMembership.MembershipRole.MEMBER,
+        )
+        self.client.force_authenticate(user=member)
+
+        response = self.client.put(
+            f"/api/groups/{group.id}/",
+            {
+                "name": "Tentativa de atualizacao",
+                "description": "Nao deve persistir.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        group.refresh_from_db()
+        self.assertEqual(group.name, "Grupo de estudos")
+
+    def test_active_member_cannot_patch_group(self):
+        member = self.create_user("member@example.com")
+        group = self.create_group_with_membership(
+            member,
+            role=GroupMembership.MembershipRole.MEMBER,
+        )
+        self.client.force_authenticate(user=member)
+
+        response = self.client.patch(
+            f"/api/groups/{group.id}/",
+            {"name": "Tentativa parcial"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        group.refresh_from_db()
+        self.assertEqual(group.name, "Grupo de estudos")
+
+    def test_authenticated_non_member_cannot_update_group(self):
+        owner = self.create_user("owner@example.com")
+        outsider = self.create_user("outsider@example.com")
+        group = self.create_group_with_membership(
+            owner,
+            role=GroupMembership.MembershipRole.OWNER,
+        )
+        self.client.force_authenticate(user=outsider)
+
+        response = self.client.put(
+            f"/api/groups/{group.id}/",
+            {
+                "name": "Tentativa de outsider",
+                "description": "Nao deve persistir.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        group.refresh_from_db()
+        self.assertEqual(group.name, "Grupo de estudos")
+
+    def test_inactive_owner_cannot_update_group(self):
+        owner = self.create_user("owner@example.com")
+        group = self.create_group_with_membership(
+            owner,
+            role=GroupMembership.MembershipRole.OWNER,
+            is_active=False,
+        )
+        self.client.force_authenticate(user=owner)
+
+        response = self.client.put(
+            f"/api/groups/{group.id}/",
+            {
+                "name": "Tentativa inativa",
+                "description": "Nao deve persistir.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        group.refresh_from_db()
+        self.assertEqual(group.name, "Grupo de estudos")
+
+    def test_authenticated_user_can_retrieve_group_detail(self):
+        owner = self.create_user("owner@example.com")
+        viewer = self.create_user("viewer@example.com")
+        group = self.create_group_with_membership(
+            owner,
+            role=GroupMembership.MembershipRole.OWNER,
+        )
+        self.client.force_authenticate(user=viewer)
+
+        response = self.client.get(f"/api/groups/{group.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(group.id))
 
 
 class GroupInviteApiTests(APITestCase):

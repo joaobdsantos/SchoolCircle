@@ -11,7 +11,7 @@ from apps.groups.commands import (
     DeclineGroupInviteCommand,
 )
 from apps.groups.models import GroupInvite, GroupMembership, StudyGroup
-from apps.groups.permissions import IsActiveGroupMember
+from apps.groups.permissions import IsActiveGroupMember, IsGroupOwnerForUnsafeMethods
 from apps.groups.serializers import (
     GroupInviteSerializer,
     GroupMembershipSerializer,
@@ -48,7 +48,7 @@ class StudyGroupListCreateView(generics.ListCreateAPIView):
 
 
 class StudyGroupDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsGroupOwnerForUnsafeMethods]
     queryset = StudyGroup.objects.all()
     serializer_class = StudyGroupSerializer
     lookup_field = "id"

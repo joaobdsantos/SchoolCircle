@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 from apps.groups.models import GroupMembership
 
@@ -19,5 +19,20 @@ class IsActiveGroupMember(BasePermission):
         return GroupMembership.objects.filter(
             user=request.user,
             group_id=group_id,
+            is_active=True,
+        ).exists()
+
+
+class IsGroupOwnerForUnsafeMethods(BasePermission):
+    message = "Apenas o owner ativo do grupo pode atualizar o grupo."
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+
+        return GroupMembership.objects.filter(
+            user=request.user,
+            group=obj,
+            role=GroupMembership.MembershipRole.OWNER,
             is_active=True,
         ).exists()
